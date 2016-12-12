@@ -9,6 +9,7 @@
 
 function matrix_api_php_client_autoload($className)
 {
+	#echo $className;
 	$classPath = explode('_', $className);
 	if ($classPath[0] != 'MatrixOrg') {
 		return;
@@ -16,8 +17,13 @@ function matrix_api_php_client_autoload($className)
 	// Drop 'MatrixOrg', and maximum class file path depth in this project is 3.
 	$classPath = array_slice($classPath, 1, 2);
 	$filePath = dirname(__FILE__) . '/src/' . implode('/', $classPath) . '.php';
+
+	#echo $filePath;
 	if (file_exists($filePath)) {
+	#	echo "file exists";
 		require_once($filePath);
+	} else {
+	#	echo "NOT exists";
 	}
 }
 spl_autoload_register('matrix_api_php_client_autoload');

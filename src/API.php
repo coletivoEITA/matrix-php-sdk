@@ -6,9 +6,8 @@
  * http://opensource.org/licenses/MIT
  */
 
-
 /**
- * Class MatrixClient
+ * Class MatrixOrg_API
  *
  * Implements the Client-Server communication, according to the API
  *
@@ -17,7 +16,11 @@
  */
 class MatrixOrg_API {
 
-	function login($home_server, $username, $password) {
+	public function __construct($params) {
+	#	echo "A";
+	}
+
+	public function login($home_server, $username, $password) {
 		$url = $home_server.'/_matrix/client/r0/login';
 		$fields = array(
 			'type' => 'm.login.password',
