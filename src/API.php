@@ -16,42 +16,116 @@
  */
 class MatrixOrg_API {
 
-	public function __construct($params) {
-	#	echo "A";
+	private $home_server;
+	private $access_token;
+
+	private $request_timeout = 30000;
+
+	private $return_assoc_array = true;
+
+	public function __construct($home_server,$access_token=null) {
+		$this->home_server = $home_server;
+		$this->access_token = $access_token;
 	}
 
-	public function login($home_server, $username, $password) {
-		$url = $home_server.'/_matrix/client/r0/login';
+	/**
+	 * @param $method       - HTTP method
+	 * @param $relative_url - Url to reach in the homeserver, without the
+	 *                        servername and the '_matrix/' part
+	 * @param $params       - Request parameters
+	 * @param $use_access_token - True for methods that need auth
+	 */
+	public function doRequest($relative_url, $params=array(), $method='GET', $use_access_token=true) {
+		$url = $this->home_server.'/_matrix/'.trim($relative_url,'/');
+
+		$get_params = array();
+
+		if ($use_access_token) {
+			$get_params['access_token'] = $this->access_token;
+		}
+
+		if ($method=='GET') {
+			$get_params = array_merge($get_params,$params);
+		}
+
+		if (count($get_params) > 0) {
+			$url .= '?'.http_build_query($get_params);
+		}
+
+		//open connection
+		$ch = curl_init();
+		curl_setopt($ch,CURLOPT_URL,$url);
+		curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
+		curl_setopt($ch,CURLOPT_HEADER,'Content-Type: application/json');
+		curl_setopt($ch,CURLOPT_USERAGENT,'Nextcloud');
+
+		switch ($method) {
+			case 'GET':
+				curl_setopt($ch,CURLOPT_NOBODY,true);
+				break;
+			case 'POST':
+				curl_setopt($ch,CURLOPT_POST,1);
+				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params));
+				break;
+
+			case 'PUT':
+				curl_setopt($ch,CURLOPT_PUT,1);
+				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params));
+				break;
+
+			case 'DELETE':
+				curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
+				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params));
+				break;
+
+			default:
+				throw new Exception("MatrixOrg: invalid method to do a request.");
+		}
+
+
+		$result = curl_exec($ch);
+		$httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+		$json_result = json_decode($result, $this->return_assoc_array);
+
+		return array(
+			'status' => $httpcode,
+			'data' => $json_result
+		);
+
+	}
+
+	public function login($username, $password) {
+
 		$fields = array(
 			'type' => 'm.login.password',
 			'user' => $username,
 			'password' => $password
 		);
 
-		//url-ify the data for the POST
-		$fields_string = http_build_query($fields);
-
-		//open connection
-		$ch = curl_init();
-
-		//set the url, number of POST vars, POST data
-		curl_setopt($ch,CURLOPT_URL,$url);
-		curl_setopt($ch,CURLOPT_POST,count($fields));
-		curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($fields));
-		curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
-		curl_setopt($ch,CURLOPT_HEADER,'Content-Type: application/json');
-
-		//execute post
-		$result = curl_exec($ch);
+		$result = $this->doRequest('client/r0/login',$fields,'POST',false);
 
 		\OCP\Util::writeLog(
 			'files_external',
-			'RESULT: '.$result,
+			'RESULT: '.print_r($result,true),
 			\OCP\Util::ERROR
 		);
 
-		if ($result === FALSE) { return false; }
+		return $result['status'] == 200;
+	}
 
-		return true;
+
+	/**
+	 * @return mixed
+	 */
+	public function getAccessToken() {
+		return $this->access_token;
+	}
+
+	/**
+	 * @param mixed $access_token
+	 */
+	public function setAccessToken($access_token) {
+		$this->access_token = $access_token;
 	}
 }
