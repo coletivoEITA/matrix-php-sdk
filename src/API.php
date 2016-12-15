@@ -17,11 +17,17 @@
 class MatrixOrg_API {
 
 	private $home_server;
-	private $access_token;
+	private $access_token = null;
 
 	private $request_timeout = 30000;
 
 	private $return_assoc_array = true;
+
+
+	/**
+	 * @var - (bool) if connection could happen with current home_server, user, auth
+	 */
+	public $could_connect = null;
 
 	public function __construct($home_server,$access_token=null) {
 		$this->home_server = $home_server;
@@ -82,8 +88,19 @@ class MatrixOrg_API {
 				throw new Exception("MatrixOrg: invalid method to do a request.");
 		}
 
-
 		$result = curl_exec($ch);
+
+		if ($result === false) {
+			$errno = curl_errno($ch);
+
+			switch ($errno) {
+				case CURLE_OPERATION_TIMEOUTED:
+					throw new \MatrixOrg_Exception_Timeout(curl_error($ch));
+				default:
+					throw new \MatrixOrg_Exception_NetworkError(curl_error($ch));
+			}
+		}
+
 		$httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
 		$json_result = json_decode($result, $this->return_assoc_array);
@@ -105,13 +122,23 @@ class MatrixOrg_API {
 
 		$result = $this->doRequest('client/r0/login',$fields,'POST',false);
 
-		\OCP\Util::writeLog(
-			'files_external',
-			'RESULT: '.print_r($result,true),
-			\OCP\Util::ERROR
+		$this->access_token = ($result['status'] == 200) ? $result['data']['access_token'] : null;
+
+		//TODO treat case where server is not reachable
+		$this->could_connect = !empty($this->access_token);
+
+		return $result;
+	}
+
+	public function sync($since=null,$filter=1) {
+		$fields = array(
+			'filter'  => $filter,
+			'timeout' => $this->request_timeout
 		);
 
-		return $result['status'] == 200;
+		if ($since != null) $fields['since'] = $since;
+
+		return $this->doRequest('client/r0/sync',$fields,'GET',true);
 	}
 
 
