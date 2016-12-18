@@ -112,7 +112,9 @@ class MatrixOrg_API {
 
 	}
 
+	//TODO tentar conexão persistente HTTP 1.1
 	public function login($username, $password) {
+		if ($this->access_token != null) return;
 
 		$fields = array(
 			'type' => 'm.login.password',
@@ -124,10 +126,9 @@ class MatrixOrg_API {
 
 		$this->access_token = ($result['status'] == 200) ? $result['data']['access_token'] : null;
 
-		//TODO treat case where server is not reachable
-		$this->could_connect = !empty($this->access_token);
-
-		return $result;
+		if ($this->access_token == null) {
+			throw new \MatrixOrg_Exception_Connection("Matrix.org login: could not connect.");
+		}
 	}
 
 	public function sync($since=null,$filter=1) {
