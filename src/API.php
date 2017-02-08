@@ -62,26 +62,25 @@ class MatrixOrg_API {
 		$ch = curl_init();
 		curl_setopt($ch,CURLOPT_URL,$url);
 		curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
-		curl_setopt($ch,CURLOPT_HEADER,'Content-Type: application/json');
+		curl_setopt($ch,CURLOPT_HTTPHEADER,array('Accept: application/json','Content-type: application/json'));
 		curl_setopt($ch,CURLOPT_USERAGENT,'Nextcloud');
 
 		switch ($method) {
 			case 'GET':
-				curl_setopt($ch,CURLOPT_NOBODY,true);
 				break;
 			case 'POST':
-				curl_setopt($ch,CURLOPT_POST,1);
-				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params));
+				curl_setopt($ch,CURLOPT_POST,true);
+				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params,JSON_FORCE_OBJECT));
 				break;
 
 			case 'PUT':
-				curl_setopt($ch,CURLOPT_PUT,1);
-				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params));
+				curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params,JSON_FORCE_OBJECT));
 				break;
 
 			case 'DELETE':
 				curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
-				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params));
+				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params,JSON_FORCE_OBJECT));
 				break;
 
 			default:
@@ -106,6 +105,7 @@ class MatrixOrg_API {
 		$json_result = json_decode($result, $this->return_assoc_array);
 
 		return array(
+			'url' => $url,
 			'status' => $httpcode,
 			'data' => $json_result
 		);
@@ -131,17 +131,30 @@ class MatrixOrg_API {
 		}
 	}
 
+	/**
+	 * Returns true if there is a connection with Matrix.org server
+	 *
+	 * As Matrix.org server API is a WebService, there is not a persistent
+	 * connection to the server. Instead we simulate it by knowing if the last
+	 * login attempt was successful or not.
+	 *
+	 * @return bool true if the last login tentative was successful
+	 */
+	public function connected() {
+		return $this->access_token != null;
+	}
+
+
 	public function sync($since=null,$filter=1) {
 		$fields = array(
-			'filter'  => $filter,
-			'timeout' => $this->request_timeout
+			'filter'       => $filter,
+			'timeout'      => $this->request_timeout
 		);
 
 		if ($since != null) $fields['since'] = $since;
 
 		return $this->doRequest('client/r0/sync',$fields,'GET',true);
 	}
-
 
 	/**
 	 * @return mixed
@@ -155,5 +168,34 @@ class MatrixOrg_API {
 	 */
 	public function setAccessToken($access_token) {
 		$this->access_token = $access_token;
+	}
+
+	/**
+	 * Converts a mxc:// address to a file to a download address
+	 * @param $mxcAddress
+	 */
+	public function downloadUrl($mxcAddress) {
+		if (preg_match('/^mxc:\/\//',$mxcAddress)) {
+			return $this->home_server.'/_matrix/media/v1/download/'.preg_replace('/^mxc:\/\//',"",$mxcAddress);
+		}
+		return "";
+	}
+
+	/**************************************************************************
+	 * Room Methods                                                           *
+	 **************************************************************************/
+	public function messages($room_id, $from, $to=null, $dir='b', $limit=20, $filter=[]) {
+		$fields = [];
+		$fields['from'] = $from;
+		if ($to) $fields['to'] = $to;
+		$fields['dir'] = $dir ? $dir : 'b';
+		$fields['limit'] = $limit ? $limit : 20;
+		if ($filter) $fields['filter'] = json_encode($filter,JSON_FORCE_OBJECT);
+
+		return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/messages',$fields,'GET',true);
+	}
+
+	public function redact($room_id, $event_id) {
+		return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/redact/'.urlencode($event_id),[],'POST',true);
 	}
 }
