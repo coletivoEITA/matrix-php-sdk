@@ -41,13 +41,19 @@ class MatrixOrg_API {
 	 * @param $params       - Request parameters
 	 * @param $use_access_token - True for methods that need auth
 	 */
-	public function doRequest($relative_url, $params=array(), $method='GET', $use_access_token=true) {
+	public function doRequest($relative_url, $params=array(), $method='GET', $use_access_token=true, $file=null) {
 		$url = $this->home_server.'/_matrix/'.trim($relative_url,'/');
 
 		$get_params = array();
 
+		$http_headers = array('Accept: application/json','Content-type: application/json');
+
 		if ($use_access_token) {
 			$get_params['access_token'] = $this->access_token;
+		}
+
+		if ($file) {
+			$get_params['filename'] = $params['filename'];
 		}
 
 		if ($method=='GET') {
@@ -62,15 +68,38 @@ class MatrixOrg_API {
 		$ch = curl_init();
 		curl_setopt($ch,CURLOPT_URL,$url);
 		curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
-		curl_setopt($ch,CURLOPT_HTTPHEADER,array('Accept: application/json','Content-type: application/json'));
 		curl_setopt($ch,CURLOPT_USERAGENT,'Nextcloud');
+		#curl_setopt($ch, CURLOPT_TIMEOUT, 3);
 
 		switch ($method) {
 			case 'GET':
 				break;
 			case 'POST':
-				curl_setopt($ch,CURLOPT_POST,true);
-				curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params,JSON_FORCE_OBJECT));
+
+				if ($file) {
+					#curl_setopt($ch,CURLOPT_VERBOSE,true);
+					#$flog = fopen('/tmp/curllog','a');
+					#fseek($flog,0,SEEK_END);
+					#curl_setopt($ch,CURLOPT_STDERR,$flog);
+
+					curl_setopt($ch,CURLOPT_POST,true);
+
+					$mime =  mime_content_type($file);
+
+					curl_setopt(
+						$ch,
+						CURLOPT_POSTFIELDS,
+						file_get_contents($file)
+					);
+
+
+					curl_setopt($ch,CURLOPT_HEADER,false);
+
+				} else {
+					curl_setopt($ch,CURLOPT_POST,true);
+					curl_setopt($ch,CURLOPT_POSTFIELDS,json_encode($params,JSON_FORCE_OBJECT));
+				}
+
 				break;
 
 			case 'PUT':
@@ -87,7 +116,12 @@ class MatrixOrg_API {
 				throw new Exception("MatrixOrg: invalid method to do a request.");
 		}
 
+		curl_setopt($ch,CURLOPT_HTTPHEADER,$http_headers);
+		#echo "BEFORE CURL_EXEC";
 		$result = curl_exec($ch);
+
+		#fclose($flog);
+		#echo "AFTER CURL_EXEC";
 
 		if ($result === false) {
 			$errno = curl_errno($ch);
@@ -181,6 +215,10 @@ class MatrixOrg_API {
 		return "";
 	}
 
+	public function upload($file, $filename) {
+		return $this->doRequest('media/v1/upload',array('filename' => $filename),'POST',true,$file);
+	}
+
 	/**************************************************************************
 	 * Room Methods                                                           *
 	 **************************************************************************/
@@ -198,4 +236,54 @@ class MatrixOrg_API {
 	public function redact($room_id, $event_id) {
 		return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/redact/'.urlencode($event_id),[],'POST',true);
 	}
+
+	public function send($room_id, $event_type, $params=[], $txn_id=null) {
+		if ($txn_id == null) {
+			$txn_id = substr(md5(rand()), 0, 15);
+		}
+
+		return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/send/'.$event_type.'/'.$txn_id,$params,'PUT',true);
+	}
+
+	/**************************************************************************
+	 * Message Methods                                                        *
+	 **************************************************************************/
+
+	public function sendFile($room_id, $file, $filename) {
+		$result = $this->upload($file,$filename);
+
+		if ($result['status'] == 200) {
+
+			$file_info = array(
+				'size'     => filesize($file),
+				'mimetype' => mime_content_type($file)
+			);
+
+			$mime_group = explode('/',$file_info['mimetype'])[0];
+
+			$file_type = (in_array($mime_group,array('video','audio','image'))) ? 'm.'.$mime_group : 'm.file';
+
+			if ($mime_group == 'image') {
+				list($width, $height) = @getimagesize($file);
+				$file_info['w'] = $width;
+				$file_info['h'] = $height;
+			}
+
+			$params = array(
+				"body"    => $filename,
+    			"info"    => $file_info,
+    			"msgtype" => $file_type,
+    			"url"     => $result['data']['content_uri']
+			);
+
+			$result = $this->send($room_id, 'm.room.message', $params);
+
+			if ($result['status'] == 200) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
 }
