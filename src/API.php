@@ -179,7 +179,7 @@ class MatrixOrg_API {
 	}
 
 
-	public function sync($since=null,$filter=1) {
+	public function sync($since=null,$filter=0) {
 		$fields = array(
 			'filter'       => $filter,
 			'timeout'      => $this->request_timeout
