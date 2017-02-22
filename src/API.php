@@ -23,6 +23,8 @@ class MatrixOrg_API {
 
 	private $return_assoc_array = true;
 
+	private $user_id = null;
+
 
 	/**
 	 * @var - (bool) if connection could happen with current home_server, user, auth
@@ -159,6 +161,8 @@ class MatrixOrg_API {
 		$result = $this->doRequest('client/r0/login',$fields,'POST',false);
 
 		$this->access_token = ($result['status'] == 200) ? $result['data']['access_token'] : null;
+		$this->user_id = ($result['status'] == 200) ? $result['data']['user_id'] : null;
+
 
 		if ($this->access_token == null) {
 			throw new \MatrixOrg_Exception_Connection("Matrix.org login: could not connect.");
@@ -217,6 +221,39 @@ class MatrixOrg_API {
 
 	public function upload($file, $filename) {
 		return $this->doRequest('media/v1/upload',array('filename' => $filename),'POST',true,$file);
+	}
+
+	/**************************************************************************
+	 * User Methods                                                           *
+	 **************************************************************************/
+
+	/**
+	 * Gets the user id of the logged-in user
+	 */
+	public function getUserId() {
+		return $this->user_id;
+	}
+
+	/**
+	 * @param $params (must follow spec in http://matrix.org/docs/spec/client_server/r0.2.0.html#id122)
+	 * @param $user_id (optional) If not provided, will use the logged in user_id
+	 */
+	public function createFilter($params,$user_id=null) {
+		if ($user_id == null) {
+			$user_id = $this->user_id;
+		}
+		return $this->doRequest('client/r0/user/'.urlencode($user_id).'/filter',$params,'POST',true);
+	}
+
+	/**
+	 * @param $params (must follow spec in http://matrix.org/docs/spec/client_server/r0.2.0.html#id121)
+	 * @param $user_id (optional) If not provided, will use the logged in user_id
+	 */
+	public function queryFilter($filter_id,$user_id=null) {
+		if ($user_id == null) {
+			$user_id = $this->user_id;
+		}
+		return $this->doRequest('client/r0/user/'.urlencode($user_id).'/filter/'.urlencode($filter_id),array(),'GET',true);
 	}
 
 	/**************************************************************************
