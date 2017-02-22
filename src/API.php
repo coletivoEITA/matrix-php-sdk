@@ -71,7 +71,9 @@ class MatrixOrg_API {
 		curl_setopt($ch,CURLOPT_URL,$url);
 		curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
 		curl_setopt($ch,CURLOPT_USERAGENT,'Nextcloud');
-		#curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+
+		//FIXME set proper ssl verification
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
 		switch ($method) {
 			case 'GET':
