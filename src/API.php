@@ -289,18 +289,26 @@ class MatrixOrg_API {
 	 **************************************************************************/
 
 	public function sendFile($room_id, $file, $filename) {
+
+		$final_result = array();
 		$result = $this->upload($file,$filename);
 
 		if ($result['status'] == 200) {
+
+			$final_result['url'] = $result['data']['content_uri'];
 
 			$file_info = array(
 				'size'     => filesize($file),
 				'mimetype' => mime_content_type($file)
 			);
 
+			$final_result = array_merge($final_result,$file_info);
+
 			$mime_group = explode('/',$file_info['mimetype'])[0];
 
 			$file_type = (in_array($mime_group,array('video','audio','image'))) ? 'm.'.$mime_group : 'm.file';
+
+			$final_result['msgtype'] = $file_type;
 
 			if ($mime_group == 'image') {
 				list($width, $height) = @getimagesize($file);
@@ -318,8 +326,12 @@ class MatrixOrg_API {
 			$result = $this->send($room_id, 'm.room.message', $params);
 
 			if ($result['status'] == 200) {
-				return true;
+				$final_result['event_id'] = $result['data']['event_id'];
 			}
+		}
+
+		if ($result['status'] == 200) {
+			return $final_result;
 		}
 		return false;
 	}
