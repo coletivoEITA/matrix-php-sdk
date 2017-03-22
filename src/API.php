@@ -144,6 +144,7 @@ class MatrixOrg_API {
 
 		return array(
 			'url' => $url,
+			'params' => $params,
 			'status' => $httpcode,
 			'data' => $json_result
 		);
@@ -293,6 +294,8 @@ class MatrixOrg_API {
 		$final_result = array();
 		$result = $this->upload($file,$filename);
 
+		$final_result['1st_request_result'] = $result;
+
 		if ($result['status'] == 200) {
 
 			$final_result['url'] = $result['data']['content_uri'];
@@ -309,13 +312,35 @@ class MatrixOrg_API {
 			$file_type = (in_array($mime_group,array('video','audio','image'))) ? 'm.'.$mime_group : 'm.file';
 
 			$final_result['msgtype'] = $file_type;
-
+/*
 			if ($mime_group == 'image') {
 				list($width, $height) = @getimagesize($file);
 				$file_info['w'] = $width;
 				$file_info['h'] = $height;
-			}
 
+				if ($width > 800 or $height > 600) {
+					//Generate and send thumbnail
+					$thumb_filename = $this->generateThumbnail($filename,800,600);
+					$thumb_up_res = $this->upload($thumb_filename,"undefined");
+					$thumb_file_info = array(
+						'size'     => filesize($thumb_filename),
+						'mimetype' => mime_content_type($thumb_filename)
+					);
+					list($thumb_w,$thumb_h) = @getimagesize($thumb_filename);
+					$thumb_file_info['w'] = $thumb_w;
+					$thumb_file_info['h'] = $thumb_h;
+
+					$file_info['thumbnail_info'] = $thumb_file_info;
+					$file_info['thumbnail_url'] = $thumb_up_res['data']['content_uri'];
+
+					unlink($thumb_filename);
+				} else {
+					//Send main image as thumbnail
+					$file_info['thumbnail_info'] = $file_info;
+					$file_info['thumbnail_url'] = $result['data']['content_uri'];
+				}
+			}
+*/
 			$params = array(
 				"body"    => $filename,
     			"info"    => $file_info,
@@ -324,6 +349,8 @@ class MatrixOrg_API {
 			);
 
 			$result = $this->send($room_id, 'm.room.message', $params);
+
+			$final_result['2nd_request_result'] = $result;
 
 			if ($result['status'] == 200) {
 				$final_result['event_id'] = $result['data']['event_id'];
@@ -334,6 +361,44 @@ class MatrixOrg_API {
 			return $final_result;
 		}
 		return false;
+	}
+
+	/**
+	 *
+	 * Generate Thumbnail using Imagick class
+	 *
+	 * @param string $img
+	 * @param string $width
+	 * @param string $height
+	 * @param int $quality
+	 * @return boolean on true
+	 * @throws Exception
+	 * @throws ImagickException
+	 */
+	private function generateThumbnail($img, $maxwidth, $maxheight, $jpegQuality = 90)
+	{
+		if (is_file($img)) {
+			$imagick = new Imagick(realpath($img));
+			if ($imagick->getImageFormat() == 'jpeg') {
+				$imagick->setImageCompression(Imagick::COMPRESSION_JPEG);
+				$imagick->setImageCompressionQuality($jpegQuality);
+			}
+			#$imagick->setImageFormat('jpeg');
+
+			$imagick->thumbnailImage($maxwidth, $maxheight, true, false);
+
+			$arr = explode('.',$img);
+			$ext = array_pop($arr);
+			$filename_no_ext = implode(".",$arr);
+			$thumb_filename = $filename_no_ext . '_thumb' . '.'.$ext;
+			if (file_put_contents($filename_no_ext . '_thumb' . '.'.$ext, $imagick) === false) {
+				throw new Exception("Could not put contents.");
+			}
+			return $thumb_filename;
+		}
+		else {
+			throw new Exception("No valid image provided with {$img}.");
+		}
 	}
 
 
