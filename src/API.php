@@ -48,7 +48,12 @@ class MatrixOrg_API {
 
 		$get_params = array();
 
-		$http_headers = array('Accept: application/json','Content-type: application/json');
+		if ($file) {
+			$http_headers = array('Accept: application/json','Content-type: '.mime_content_type($file));
+		} else {
+			$http_headers = array('Accept: application/json','Content-type: application/json');
+		}
+
 
 		if ($use_access_token) {
 			$get_params['access_token'] = $this->access_token;
@@ -294,48 +299,49 @@ class MatrixOrg_API {
 	public function sendFile($room_id, $file, $filename, $file_thumbnail = null) {
 
 		$final_result = array();
+
+		$file_info = array(
+			'size'     => filesize($file),
+			'mimetype' => mime_content_type($file)
+		);
+
+		$mime_group = explode('/',$file_info['mimetype'])[0];
+
+		$file_type = (in_array($mime_group,array('video','audio','image'))) ? 'm.'.$mime_group : 'm.file';
+
+		if ($mime_group == 'image') {
+			list($width, $height) = @getimagesize($file);
+			$file_info['w'] = $width;
+			$file_info['h'] = $height;
+
+			if ($file_thumbnail) {
+				$thumb_up_res = $this->upload($file_thumbnail,"undefined");
+				list($thumb_w,$thumb_h) = @getimagesize($file_thumbnail);
+				$thumb_file_info = array(
+					'w'        => $thumb_w,
+					'h'        => $thumb_h,
+					'mimetype' => mime_content_type($file_thumbnail),
+					'size'     => filesize($file_thumbnail)
+				);
+
+				$file_info['thumbnail_info'] = $thumb_file_info;
+				$file_info['thumbnail_url'] = $thumb_up_res['data']['content_uri'];
+
+				$final_result['thumb_upload_request_result'] = $thumb_up_res;
+			}
+		}
+
 		$result = $this->upload($file,$filename);
 
-		$final_result['1st_request_result'] = $result;
+		$final_result['file_upload_request_result'] = $result;
 
 		if ($result['status'] == 200) {
 
 			$final_result['url'] = $result['data']['content_uri'];
 
-			$file_info = array(
-				'size'     => filesize($file),
-				'mimetype' => mime_content_type($file)
-			);
-
 			$final_result = array_merge($final_result,$file_info);
 
-			$mime_group = explode('/',$file_info['mimetype'])[0];
-
-			$file_type = (in_array($mime_group,array('video','audio','image'))) ? 'm.'.$mime_group : 'm.file';
-
 			$final_result['msgtype'] = $file_type;
-
-			if ($mime_group == 'image') {
-				list($width, $height) = @getimagesize($file);
-				$file_info['w'] = $width;
-				$file_info['h'] = $height;
-
-				if ($file_thumbnail) {
-					$thumb_up_res = $this->upload($file_thumbnail,"undefined");
-					list($thumb_w,$thumb_h) = @getimagesize($file_thumbnail);
-					$thumb_file_info = array(
-						'w'        => $thumb_w,
-						'h'        => $thumb_h,
-						'mimetype' => mime_content_type($file_thumbnail),
-						'size'     => filesize($file_thumbnail)
-					);
-
-					$file_info['thumbnail_info'] = $thumb_file_info;
-					$file_info['thumbnail_url'] = $thumb_up_res['data']['content_uri'];
-
-					$final_result['2nd_request_result'] = $thumb_up_res;
-				}
-			}
 
 			$params = array(
 				"body"    => $filename,
