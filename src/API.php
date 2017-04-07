@@ -217,6 +217,13 @@ class MatrixOrg_API {
 	}
 
 	/**
+	 * @return mixed
+	 */
+	public function getHomeServer() {
+		return $this->home_server;
+	}
+
+	/**
 	 * Converts a mxc:// address to a file to a download address
 	 * @param $mxcAddress
 	 */
