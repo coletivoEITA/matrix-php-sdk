@@ -25,6 +25,9 @@ class MatrixOrg_API {
 
 	private $user_id = null;
 
+	//Set user and password values for auto-login if we detect that the token expired
+	private $al_username = null;
+	private $al_password = null;
 
 	/**
 	 * @var - (bool) if connection could happen with current home_server, user, auth
@@ -35,6 +38,25 @@ class MatrixOrg_API {
 		$this->home_server = $home_server;
 		$this->access_token = $access_token;
 	}
+
+	/**
+	 * Username to be used to retry login when the access token is detected to be invalid
+	 * @param null $al_username
+	 */
+	public function setAutoLoginUsername($al_username) {
+		$this->al_username = $al_username;
+	}
+
+	/**
+	 * Password to be used to retry login when the access token is detected to be invalid
+	 * @param null $al_password
+	 */
+	public function setAutoLoginPassword($al_password) {
+		$this->al_password = $al_password;
+	}
+
+	#internal use only inside $this->doRequest()
+	private $_request_relogin = false;
 
 	/**
 	 * @param $method       - HTTP method
@@ -147,6 +169,26 @@ class MatrixOrg_API {
 
 		$json_result = json_decode($result, $this->return_assoc_array);
 
+		//Try to relogin ONCE if access token expired, and retry request.
+		if ($httpcode == 401 and $json_result['errcode'] == "M_UNKNOWN_TOKEN" and $this->al_username and $this->al_password and !$this->_request_relogin) {
+			$login_res = $this->login($this->al_username,$this->al_password, true);
+			$this->_request_relogin = true;
+			$result2 = $this->doRequest($relative_url, $params, $method, $use_access_token, $file);
+			$this->_request_relogin = false;
+			$result2['new_login_done'] = true;
+			$result2['login_res'] = $login_res;
+			$result2['pre_login'] = array(
+				'url' => $url,
+				'params' => $params,
+				'status' => $httpcode,
+				'data' => $json_result
+			);
+
+
+			return $result2;
+		}
+
+
 		return array(
 			'url' => $url,
 			'params' => $params,
@@ -157,8 +199,8 @@ class MatrixOrg_API {
 	}
 
 	//TODO tentar conexão persistente HTTP 1.1
-	public function login($username, $password) {
-		if ($this->access_token != null) return;
+	public function login($username, $password, $redo_login=false) {
+		if ($this->access_token != null and !$redo_login) return;
 
 		$fields = array(
 			'type' => 'm.login.password',
@@ -175,6 +217,7 @@ class MatrixOrg_API {
 		if ($this->access_token == null) {
 			throw new \MatrixOrg_Exception_Connection("Matrix.org login: could not connect.");
 		}
+		return $result;
 	}
 
 	/**
@@ -335,12 +378,17 @@ class MatrixOrg_API {
 				$file_info['thumbnail_url'] = $thumb_up_res['data']['content_uri'];
 
 				$final_result['thumb_upload_request_result'] = $thumb_up_res;
+
+				$final_result['status'] = $thumb_up_res['status'];
+				$final_result['new_login_done'] = $thumb_up_res['new_login_done'];
 			}
 		}
 
 		$result = $this->upload($file,$filename);
 
 		$final_result['file_upload_request_result'] = $result;
+		$final_result['status'] = $result['status'] != 200 ? $result['status'] : $final_result['status'];
+		$final_result['new_login_done'] = $result['new_login_done'] or $final_result['new_login_done'];
 
 		if ($result['status'] == 200) {
 
@@ -364,12 +412,12 @@ class MatrixOrg_API {
 			if ($result['status'] == 200) {
 				$final_result['event_id'] = $result['data']['event_id'];
 			}
+
+			$final_result['status'] = $result['status'] != 200 ? $result['status'] : $final_result['status'];
+			$final_result['new_login_done'] = $result['new_login_done'] or $final_result['new_login_done'];
 		}
 
-		if ($result['status'] == 200) {
-			return $final_result;
-		}
-		return false;
+		return $final_result;
 	}
 
 }
