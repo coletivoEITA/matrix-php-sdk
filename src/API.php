@@ -319,6 +319,21 @@ class MatrixOrg_API {
 	}
 
 	/**************************************************************************
+	 * Presence Methods                                                       *
+	 **************************************************************************/
+
+	 /**
+ 	 * @param $user_id (optional) If not provided, will use the logged in user_id
+ 	 */
+ 	public function presenceStatus($user_id=null) {
+ 		if ($user_id == null) {
+ 			$user_id = $this->user_id;
+ 		}
+ 		return $this->doRequest('client/r0/presence/'.urlencode($user_id).'/status',array(),'GET',true);
+ 	}
+
+
+	/**************************************************************************
 	 * Room Methods                                                           *
 	 **************************************************************************/
 	public function messages($room_id, $from, $to=null, $dir='b', $limit=20, $filter=[]) {
@@ -341,15 +356,15 @@ class MatrixOrg_API {
 
 		return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/send/'.$event_type.'/'.$txn_id,$params,'PUT',true);
 	}
-	
+
 	/**************************************************************************
 	* State Methods                                                           *
 	**************************************************************************/
-	
+
 	public function setTopic($room_id, $topic) {
 		return $this->state($room_id, "m.room.topic", array("topic"=>$topic));
 	}
-	
+
 	private function state($room_id, $event_type, $params=[]) {
 		return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/state/'.$event_type,$params,'PUT',true);
 	}
@@ -357,8 +372,8 @@ class MatrixOrg_API {
 	/**************************************************************************
 	 * Message Methods                                                        *
 	 **************************************************************************/
-	 
-	
+
+
 
 	public function sendFile($room_id, $file, $filename, $file_thumbnail = null) {
 
