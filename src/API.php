@@ -198,7 +198,7 @@ class MatrixOrg_API {
 
 	}
 
-	//TODO tentar conexão persistente HTTP 1.1
+	//TODO try persistent connection HTTP 1.1
 	public function login($username, $password, $redo_login=false) {
 		if ($this->access_token != null and !$redo_login) return;
 
@@ -217,6 +217,12 @@ class MatrixOrg_API {
 		if ($this->access_token == null) {
 			throw new \MatrixOrg_Exception_Connection("Matrix.org login: could not connect.");
 		}
+		return $result;
+	}
+
+	public function logout() {
+		$result = $this->doRequest('client/r0/logout',array(),'POST',true);
+
 		return $result;
 	}
 
