@@ -363,6 +363,23 @@ class MatrixOrg_API {
 		return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/send/'.$event_type.'/'.$txn_id,$params,'PUT',true);
 	}
 
+    public function invite($room_id, $user_id) {
+	    $params = array('user_id' => $user_id);
+        return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/invite',$params,'POST',true);
+    }
+
+    public function join($room_id) {
+        return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/join',array(),'POST',true);
+    }
+
+    public function kick($room_id, $user_id, $reason) {
+        $params = array(
+            'user_id' => $user_id,
+            'reason'  => $reason
+        );
+        return $this->doRequest('client/r0/rooms/'.urlencode($room_id).'/kick',$params,'POST',true);
+    }
+
 	/**************************************************************************
 	* State Methods                                                           *
 	**************************************************************************/
